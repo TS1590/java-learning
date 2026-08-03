@@ -22,7 +22,7 @@ public class GuessNumber {
             count++;
 
             if (guess > target) {
-                System.out.println("猜大了,再小一点~");
+                System.out.println("猜大了,再小一点~ ");
             } else if (guess < target) {
                 System.out.println("猜小了,再大一点~");
             } else {
