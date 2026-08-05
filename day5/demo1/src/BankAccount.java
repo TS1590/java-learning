@@ -31,7 +31,7 @@ public class BankAccount {
     public void withdraw(double money) {
         if (money <= 0) {
             System.out.println("取款金额必须大于 0");
-        } else if (this.balance <= money) {
+        } else if (this.balance < money) {
             System.out.println("余额不足");
         }else {
             this.balance -= money;
