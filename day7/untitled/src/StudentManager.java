@@ -40,10 +40,11 @@ public class StudentManager {
                 case 4:
                     System.out.print("姓名：");
                     String name1 = sc.next();
-                    for (int i = 0; i < size; i++) {
-                        if(students[i].getName().equals(name1)){
-                            System.out.println(students[i].getName() + " " + students[i].getScore());
-                        }
+                    int index = findStudent(students, size, name1);
+                    if (index == -1) {
+                        System.out.println("未找到此人");
+                    } else {
+                        System.out.println(students[index].getName() + " " + students[index].getScore());
                     }
                     break;
                 case 5:
@@ -51,32 +52,41 @@ public class StudentManager {
                     String name2 = sc.next();
                     System.out.print("新的成绩：");
                     int score1 = sc.nextInt();
-                    for (int i = 0; i < size; i++) {
-                        if(students[i].getName().equals(name2)){
-                            students[i].setScore(score1);
-                            System.out.println("修改成功");
-                        }else {
-                            System.out.println("未找到此人");
-                        }
+                    int index1 = findStudent(students, size, name2);
+                    if (index1 == -1) {
+                        System.out.println("未找到此人");
+                    } else {
+                        students[index1].setScore(score1);
                     }
                     break;
                 case 6:
                     System.out.print("需要删除的姓名：");
                     String name3 = sc.next();
-                    for (int i = 0; i < size; i++) {
-                        if(students[i].getName().equals(name3)){
-                            students[i]=students[i+1];
-                            size--;
-                            System.out.println("删除成功");
-                        }else {
-                            System.out.println("未找到此人");
+                    int index2 = findStudent(students, size, name3);
+                    if (index2 == -1) {
+                        System.out.println("未找到此人");
+                    } else {
+                        for (int i = index2; i < size - 1; i++) {
+                            students[i] = students[i + 1];   // index 后面的所有元素往前挪
                         }
                     }
+                    size--;
                     break;
                 case 0:
                     System.out.println("再见");
                     return;  // ★ 退出用 return，不是 break！
             }
         }
+
+    }
+
+    public static int findStudent(Student[] students, int size, String name) {
+        for (int i = 0; i < size; i++) {
+            if (students[i].getName().equals(name)) {
+                return i;
+            }
+        }
+        return -1;
     }
 }
+
