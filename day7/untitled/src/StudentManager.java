@@ -69,8 +69,8 @@ public class StudentManager {
                         for (int i = index2; i < size - 1; i++) {
                             students[i] = students[i + 1];   // index 后面的所有元素往前挪
                         }
+                        size--;
                     }
-                    size--;
                     break;
                 case 0:
                     System.out.println("再见");
