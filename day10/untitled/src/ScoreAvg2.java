@@ -16,6 +16,6 @@ public class ScoreAvg2 {
             count++;
         }
 
-        System.out.println("平均分是" + (double)sum);
+        System.out.println("平均分是" + (double) sum / count);   // 269.0 / 3 = 89.666...
     }
 }
