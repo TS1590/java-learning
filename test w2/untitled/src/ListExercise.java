@@ -12,12 +12,20 @@ public class ListExercise {
 
         List.removeIf(s -> s.equals("C++"));
 
-        List.addLast("Java");
-
         int count = 0;
         for (String s : List) {
             if (s.equals("Java")) {
                 count++;
+            }
+        }
+        System.out.println(count);
+
+        List.add("Java");
+
+        int count1 = 0;
+        for (String s : List) {
+            if (s.equals("Java")) {
+                count1++;
             }
         }
         System.out.println(count);
