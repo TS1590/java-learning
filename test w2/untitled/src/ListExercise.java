@@ -28,7 +28,7 @@ public class ListExercise {
                 count1++;
             }
         }
-        System.out.println(count);
+        System.out.println(count1);
 
         for(String s: List){
             System.out.println(s);
