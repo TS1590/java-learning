@@ -1,8 +1,8 @@
 public class Box3 {
     public static void main(String[] args) {
         Shelf shelf = new Shelf();
-        new Thread(new Producer(shelf), "生产者").start();
-        new Thread(new Consumer(shelf), "消费者").start();
+        new Thread(new Producer1(shelf), "生产者").start();
+        new Thread(new Consumer1(shelf), "消费者").start();
     }
 }
 
