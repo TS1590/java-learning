@@ -23,14 +23,14 @@ public class DeadLock {
         }
     }
 
-    // 线程 2：先拿 B，再拿 A（顺序反了 → 死锁）
+    // 线程 2：修复！改成和线程1 一样的加锁顺序（先 A 后 B）→ 死锁解除
     static class Worker2 implements Runnable {
         public void run() {
-            synchronized (LOCK_B) {
-                System.out.println(Thread.currentThread().getName() + " 拿到锁B，等锁A...");
+            synchronized (LOCK_A) {
+                System.out.println(Thread.currentThread().getName() + " 拿到锁A，等锁B...");
                 try { Thread.sleep(100); } catch (InterruptedException e) { }
-                synchronized (LOCK_A) {
-                    System.out.println(Thread.currentThread().getName() + " 拿到锁A，干活");
+                synchronized (LOCK_B) {
+                    System.out.println(Thread.currentThread().getName() + " 拿到锁B，干活");
                 }
             }
         }
