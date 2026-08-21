@@ -28,15 +28,27 @@ public class JvmMemoryDemo {
         // ⑤ 方法调用 → 新栈帧压栈；方法结束 → 弹栈（栈内存自动释放）
         greet(stu);
 
+        // ⑦ 数组也是对象 → new int[3] 在堆；arr 引用在栈
+        int[] arr = new int[3];
+        arr[0] = 88;              // 改的是堆里数组的元素
+        printSum(10, 20);         // 静态方法调用 → 新栈帧压栈，参数 a/b、局部变量 sum 都在栈里
+
         // ⑥ 字符串字面量 → 字符串常量池（JDK7+ 池子在堆里）
         String s1 = "abc";
         String s2 = new String("abc");
 
         System.out.println("栈上: age=" + age + ", score=" + score);
+        System.out.println("堆里数组的第 0 个元素: " + arr[0]);
         System.out.println("s1 和 s2 是同一个对象吗? " + (s1 == s2));
     }
 
     static void greet(JvmMemoryDemo s) {
         System.out.println("你好，" + s.name + "，来自 " + school);
+    }
+
+    // ⑧ 新加的静态方法：调用时压一个栈帧，结束弹栈
+    static void printSum(int a, int b) {
+        int sum = a + b;          // 局部变量 sum → printSum 栈帧（栈）
+        System.out.println("和: " + sum);
     }
 }
