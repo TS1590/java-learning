@@ -101,3 +101,131 @@ DROP INDEX idx_name ON student;
 ## 七、下一步
 
 - Day 6：EXPLAIN 执行计划实战（完整读懂 type/key/rows 各列）+ 索引深入
+
+---
+
+# MySQL 学习笔记 - Day 29（W5 Day 6 · EXPLAIN 执行计划实战）
+
+> 日期：2026-09-02
+> 目标：① 会读 EXPLAIN 每一列 ② 一眼看出 SQL 走没走索引 ③ 掌握 3 种索引失效写法
+> 进度：Day 6 ✅
+
+## 一、EXPLAIN 怎么用
+
+```sql
+EXPLAIN SELECT * FROM city WHERE Population = 1000000;      -- 不真查，输出执行计划
+EXPLAIN SELECT * FROM city WHERE Population = 1000000\G      -- 竖排，一字段一行
+```
+
+**读报告三步法**：① 先看 type（怎么查的）→ ② 再看 key（用没用索引）→ ③ 最后看 rows + Extra（翻多少行、额外动作）
+
+## 二、type 七级（面试必默写）
+
+```
+system > const > eq_ref > ref > range > index > ALL
+（左快右慢）
+```
+
+| 等级 | 白话 | 出现场景 |
+|------|------|---------|
+| const | 主键/唯一键精确命中，只查 1 行 | WHERE id = 1 |
+| eq_ref | 联表时主键一一对应 | JOIN 连接条件 |
+| ref | 普通索引等值命中 | WHERE Population = 1000000 |
+| range | 索引上范围查找 | BETWEEN / > / < |
+| index | 把整棵索引树翻一遍 | 索引列只被 ORDER BY |
+| ALL | 全表扫描，一行行翻 | 没索引 / 索引失效 |
+
+**两个警报**：看到 `ALL`（最差）或 `index`（次差）= 该加索引了。
+
+## 三、possible_keys vs key
+
+- possible_keys = 候选名单；key = 实际用上的
+- **key=NULL 且 type=ALL = 这条 SQL 没走索引**（没建 or 索引失效）
+
+## 四、rows 的含义
+
+- rows = MySQL 预估要扫描多少行，数字越小越快
+- 我实测：建索引前 rows=4046（ALL）→ 建 idx_pop 后 rows=1（ref）
+- 面试报真实数字：4046 次比较 → 1 次 = O(n) 变 O(log n) 的铁证
+
+## 五、Extra 列
+
+| Extra | 意思 | 评价 |
+|-------|------|------|
+| Using index | 覆盖索引，免回表 | 🟢 最好 |
+| Using where | 索引定位后再过滤 | 🟡 正常 |
+| Using filesort | 排序没走索引，额外排一次 | 🔴 大表要优化 |
+| Using temporary | 用了临时表（GROUP BY 常见） | 🔴 留意 |
+
+## 六、回表 vs 覆盖索引
+
+- 普通索引叶子只存（索引列 + 主键 id）→ SELECT * 拿 id 回主键索引树再查一次 = **回表**（查 2 棵树）
+- 查的列索引叶子全都有 = **覆盖索引**，Extra 显示 Using index（查 1 棵树）
+- 面试一句话："覆盖索引 = 查询的列都包含在索引里，不用回表"
+- 实战：高频查询 SELECT * 改成只查需要的列，建联合索引覆盖它
+
+## 七、索引失效 3 大坑（面试连环问）
+
+**坑 1：LIKE 前置通配符**
+```sql
+SELECT * FROM student WHERE name LIKE '%张%';   -- ❌ 不知道开头 → 索引失效
+SELECT * FROM student WHERE name LIKE '张%';    -- ✅ 知道开头 → 走索引
+-- 口诀：通配符在前 = 索引完蛋（目录按开头字母排的）
+```
+
+**坑 2：对索引列做函数/运算**
+```sql
+EXPLAIN SELECT * FROM city WHERE Population + 1 = 1000001;  -- ❌ type=ALL（实测验证！）
+EXPLAIN SELECT * FROM city WHERE Population = 1000000;      -- ✅ type=ref（运算挪到另一边）
+```
+
+**坑 3：隐式类型转换**
+```sql
+SELECT * FROM user WHERE phone = 13800138000;    -- ❌ 数字 vs VARCHAR → 列被偷偷转换 = 函数
+SELECT * FROM user WHERE phone = '13800138000';  -- ✅ 字符串，和列类型一致
+```
+
+> 口诀：**让索引列"裸奔"**——别套函数、别做运算、类型要和列一致。
+
+## 八、我的 5 个 EXPLAIN 案例实测记录
+
+```sql
+USE world;
+-- city 表现有索引：PRIMARY(id)、idx_pop(临时建)
+EXPLAIN SELECT * FROM city WHERE ID = 1;                          -- type=const, key=PRIMARY, rows=1
+EXPLAIN SELECT * FROM city WHERE Population = 1000000;            -- type=ref,   key=idx_pop, rows=1
+EXPLAIN SELECT * FROM city WHERE Population BETWEEN 1000000 AND 2000000;  -- type=range, key=idx_pop
+EXPLAIN SELECT * FROM city WHERE Name LIKE '%zhou%';              -- type=ALL（前置通配符失效）
+EXPLAIN SELECT * FROM city ORDER BY Population;                   -- 可能 type=index / Extra=filesort
+-- 挑战：索引失效 + 修复对比
+EXPLAIN SELECT * FROM city WHERE Population + 1 = 1000001;        -- ❌ type=ALL（函数包列）
+EXPLAIN SELECT * FROM city WHERE Population = 1000000;            -- ✅ type=ref（列裸奔）
+```
+
+## 九、慢 SQL 排查 SOP（后端真功夫）
+
+```
+收到"接口慢"告警 → 1. 捞慢查询日志 → 2. EXPLAIN：type=ALL, key=NULL, rows=80万
+→ 3. 判断：没建索引 or 索引失效（LIKE/函数/类型） → 4. 加索引 or 改写 SQL
+→ 5. 再 EXPLAIN：type 变 ref/range, rows 掉下来 → 收工
+```
+
+简历可写："参与慢 SQL 优化，用 EXPLAIN 定位全表扫描并加索引，查询耗时从 X 降到 Y"
+
+## 十、今日测验与答案
+
+- Q1（最危险 type）：**D. ALL**（全表扫描，A const 最快 / B range / C ref 都走索引）
+- Q2（key=NULL + type=ALL 说明什么）：说明这条 SQL **没走任何索引在做全表扫描**；修复 = 给 WHERE 列建索引（或检查是否索引失效，先 EXPLAIN 验证再动手）
+- Q3（`LIKE '%张%'`）：**不能用索引**——前置通配符不知道开头是什么，目录没法按区间查；修复 `LIKE '张%'`（真需要模糊搜中间 → 全文索引/ES 另说）
+
+## 十一、口诀汇总
+
+- type 从快到慢：const → ref → range → index → ALL；看到 ALL/index 就警惕
+- 读 EXPLAIN 三步：type → key → rows/Extra
+- key=NULL + ALL = 没走索引；rows 越小越快
+- 索引失效三坑：LIKE 前置 % / 函数运算包列 / 隐式类型转换 → **让索引列裸奔**
+
+## 下一步
+
+- Day 7：MySQL 事务与隔离级别（ACID / 四种隔离级别 / 脏读·不可重复读·幻读）→ W5 收官
+- W5 复盘：自测标准含 MVCC 的 ReadView、RR 如何解决幻读（Day 7 后安排）
