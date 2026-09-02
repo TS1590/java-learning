@@ -229,3 +229,129 @@ EXPLAIN SELECT * FROM city WHERE Population = 1000000;            -- ✅ type=re
 
 - Day 7：MySQL 事务与隔离级别（ACID / 四种隔离级别 / 脏读·不可重复读·幻读）→ W5 收官
 - W5 复盘：自测标准含 MVCC 的 ReadView、RR 如何解决幻读（Day 7 后安排）
+
+---
+
+# MySQL 学习笔记 - Day 29（W5 Day 7 · 事务与隔离级别）🏁 W5 收官
+
+> 日期：2026-09-02
+> 目标：① 背出 ACID 四特性并各举一例 ② 说清四种隔离级别 + MySQL 默认 ③ 分清脏读/不可重复读/幻读
+> 进度：Day 7 ✅ = **W5 MySQL 周全部通关**
+
+## 一、什么是事务
+
+- 事务 = 一组"**要么全部成功、要么全部失败**"的 SQL 打包执行
+- 经典例子：转账 = A 扣 100 + B 加 100 两条 UPDATE，必须捆绑
+- 没有事务：第一条成功、第二条失败 → 100 块凭空消失
+
+## 二、ACID 四特性（背 + 例子）
+
+| 特性 | 含义 | 例子 |
+|------|------|------|
+| A 原子性 | 操作要么全成要么全败 | 扣款成功但加款失败 → 扣款也撤销 |
+| C 一致性 | 执行前后都符合业务规则 | 转账后两人余额**之和不变** |
+| I 隔离性 | 我在改没提交，你看不到半成品 | 我改工资没提交，同事看不到 |
+| D 持久性 | 提交后断电也不丢 | InnoDB 靠 **redo log** 崩溃恢复 |
+
+口诀：**原子是操作、一致是结果、隔离是并发、持久是落盘**。
+
+## 三、三种并发问题（面试连环问第一关）
+
+| 问题 | 定义 | 白话场景 |
+|------|------|---------|
+| **脏读** | 读到别人**还没提交**的数据 | 你改工资没保存，同事看到了；你 ROLLBACK，他读到假数据 |
+| **不可重复读** | **同一行**两次读**值不一样** | 查订单金额 100 → 同事改成 200 提交 → 再查变 200 |
+| **幻读** | **同一批数据**两次读**行数变了** | 统计金额>0 订单有 3 条 → 同事插入 1 条提交 → 再数变 4 条 |
+
+记忆区分：脏读 = 别人的**半成品**（未提交）；不可重复读 = **某一行**值被改；幻读 = **多出/少了行**。
+
+## 四、四种隔离级别（从松到严）
+
+| 级别 | 防脏读 | 防不可重复读 | 防幻读 | 说明 |
+|------|--------|------------|--------|------|
+| 读未提交 RU | ❌ | ❌ | ❌ | 什么都不防，生产没人用 |
+| 读已提交 RC | ✅ | ❌ | ❌ | 只能读已提交数据；**Oracle 默认** |
+| 可重复读 RR | ✅ | ✅ | ✅* | **MySQL 默认**（8.0） |
+| 串行化 | ✅ | ✅ | ✅ | 全防但并发≈0，没人真用 |
+
+\* 教科书说 RR 不防幻读，但 **InnoDB 靠 MVCC（快照读）+ 间隙锁（当前读）把幻读也解决了** → 面试标准答法："MySQL 默认 RR，且 InnoDB 下 RR 可以防幻读"（加分点）
+
+口诀：**脏读只被 RC 防，不可重复读要 RR 防，串行化全防但没人用**。
+对比 CP：**MySQL = RR，Oracle = RC**。
+
+## 五、事务命令 + 手动验证（双终端实测 ✅）
+
+```sql
+-- 查看当前隔离级别（8.0 语法）
+SELECT @@transaction_isolation;   -- REPEATABLE-READ
+
+-- 建测试表
+CREATE DATABASE IF NOT EXISTS test_tx;
+USE test_tx;
+CREATE TABLE IF NOT EXISTS account (id INT PRIMARY KEY, name VARCHAR(20), money DECIMAL(10,2));
+INSERT INTO account VALUES (1,'张三',1000),(2,'李四',1000);
+
+-- 终端 1：开事务扣款，别提交
+BEGIN;
+UPDATE account SET money = money - 100 WHERE id = 1;
+
+-- 终端 2（默认 RR）：看不到终端 1 改到一半的值 → 隔离性生效 ✅
+SELECT * FROM account WHERE id = 1;   -- 还是 1000
+
+-- 终端 1 提交后，终端 2 需重开事务才看到 900
+COMMIT;
+
+-- ROLLBACK 后悔药演示
+BEGIN;
+UPDATE account SET money = money - 100 WHERE id = 1;
+ROLLBACK;   -- 撤销本次事务所有修改，数据回到 900
+```
+
+## 六、autocommit 关键机制（今天的坑，必记！）
+
+- MySQL 默认 **autocommit=1**：每条 SQL 执行完**自动提交**，不等你
+- 没加 `@Transactional` 的转账 = 两条 UPDATE 各自独立提交 → 扣款落库、加钱失败 = **单边账**
+- **ROLLBACK 只对"还没提交"的事务有效**——已提交 = 盖章定稿，无法回滚
+- 正确补救：事前 = `@Transactional` 打包（异常自动回滚）；事后 = **对账补偿**（查失败日志 → 手动补账，大厂跨系统靠这个）
+
+## 七、Java 里的事务（W7 正式学，先混眼熟）
+
+```java
+@Transactional          // 方法上标注 → Spring 自动 BEGIN/COMMIT/ROLLBACK
+public void transfer(Long fromId, Long toId, BigDecimal money) {
+    accountMapper.deduct(fromId, money);   // ① 扣钱
+    accountMapper.add(toId, money);        // ② 加钱（失败 → 自动回滚 ①）
+}
+```
+
+## 八、真实工作场景
+
+1. 转账/下单/扣库存钱相关业务 → 用默认 RR 就行（W9 电商项目防超卖依赖行锁 + 原子扣减）
+2. 大厂高并发改 RC：RR 的间隙锁在高并发热点行上会锁区间 → 易死锁、拖吞吐；改 RC 只锁命中行，业务层用乐观锁/分布式锁兜底
+3. 事务管"同库"，跨系统（支付宝→银行）靠"对账 + 补偿"
+
+## 九、今日测验与答案
+
+- Q1（MySQL 8.0 默认隔离级别）：**C. 可重复读 RR**（Oracle 默认 RC，别记混）
+- Q2（读到未提交数据叫什么/哪级发生）：**脏读，发生在读未提交（RU）**——RU 是唯一不设防的级别，RC 起就挡住；MySQL 默认 RR 不会出现脏读
+- Q3（开启事务两种方式 + 回滚命令）：SQL = `BEGIN;`（或 `START TRANSACTION;`）；Java = Spring `@Transactional` 注解；扣钱成功加钱失败 → **`ROLLBACK;`** 撤销全部（在事务未提交的前提下）
+
+## 十、口诀汇总
+
+- ACID：原子是操作、一致是结果、隔离是并发、持久是落盘
+- 三问题：脏读=半成品(未提交) / 不可重复读=某行值变 / 幻读=行数变
+- 隔离级别：MySQL=RR 默认，Oracle=RC；InnoDB 的 RR 连幻读一起防（MVCC+间隙锁）
+- 事务命令：BEGIN 开拍 → COMMIT 盖章 / ROLLBACK 重拍；**已提交的撤销不了**
+- 没事务 = 单边账；对账补偿是跨系统兜底方案
+
+## W5 小结（Day 1-7 全部通关 ✅）
+
+- Day 1 MySQL 安装 + world 库 + SELECT 基础
+- Day 2 建库建表（DECIMAL 存金额）
+- Day 3 CRUD（INSERT/UPDATE/DELETE/SELECT）
+- Day 4 WHERE 进阶 + 聚合 + GROUP BY（执行顺序）
+- Day 5 存储引擎 + 索引原理（实测 4046→1）
+- Day 6 EXPLAIN 执行计划（type 七级/回表/索引失效 3 坑）
+- Day 7 事务 ACID + 隔离级别 + 三问题
+
+**W5 收官 🎉 下一步：W5 复盘（自测 + 复习）→ W6 新主题**
