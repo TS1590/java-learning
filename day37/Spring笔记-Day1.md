@@ -134,3 +134,37 @@ public class UserService {
 - ✅ 记住包扫描规则和 Boot 4.x 的 starter 改名
 - ✅ 学会判断"我的 git 仓库在哪"（`git rev-parse --show-toplevel`；git 向上找最近的 `.git`）
 - ⏳ 下一步：W7 Day 2 —— IOC 容器怎么装 Bean、Bean 生命周期、`@Autowired` 三种注入方式（为什么推荐构造器注入）
+
+## 9. 补充：变式题三问（9/15 回炉讲解）
+
+### Q1｜IOC 和 DI 是一回事吗？—— 不是
+
+- **IOC 是"设计思想"**：它管的是**控制权归谁**——对象的创建与依赖装配，主动权从我手里交给容器。
+- **DI 是"实现手段"**：它管的是**依赖怎么到我手上**——容器把我要的依赖注入进来（构造器 / Setter / 字段）。
+- 类比：IOC 相当于"面向对象"这种思想，DI 相当于"用 class + 组合"这种做法。
+- 还有另一种实现 IOC 的方式叫**依赖查找（DL）**，但工业界主流是 DI。
+
+> 口诀：**IOC 管"谁创建"，DI 管"怎么送"。** 面试答"两个是一回事"会直接丢分。
+
+### Q2｜同事自己 new 的对象，`@Transactional` 为什么不回滚？—— 因为事务长在代理上
+
+```java
+OrderService s = new OrderService();   // ❌ 原始对象，没有代理壳
+s.createOrder();                       // @Transactional 没人读
+```
+
+- Spring 的事务是 **AOP 代理**实现的：只有从容器里拿到的**代理对象**，才会在方法前后开启 / 提交 / 回滚事务。
+- `new` 出来的是**原始对象（裸对象）**，调用 `createOrder()` 就是一次普通方法调用，异常照抛，但**没人帮你回滚**。
+- **改法**：① 给 `OrderService` 加 `@Service` 交给容器统一管理；② 用到它的地方改成**注入**（构造器注入），不要再 `new`。
+
+> 口诀：**事务长在代理上，new 出来的是裸对象 —— 注解白写。**
+> 这类事故线上很常见：老代码在工具类 / 静态方法 / 非 Spring 管理的类里 `new` 了 Service，排查一下午最后发现是这一行。
+
+### Q3｜把 `@RestController` 改成 `@Controller`，访问 `/hello` 会看到什么？
+
+- `@RestController` = `@Controller` + `@ResponseBody`：返回值**不当作页面名**，直接写进响应体 → Jackson 序列化成 JSON → 浏览器看到 `{"msg":"Hello Spring Boot!"}`。
+- 只写 `@Controller`：Spring 把你的返回值当成**视图（页面）**去找模板 —— 项目里没有模板引擎、也没有叫这个名字的页面 → **报错页（Whitelabel Error Page）**，绝不是 JSON。
+- 注意区分两种失败：**路径没匹配上才是 404**；这里是路径匹配成功、但回不出数据，属于"返回值处理方式错了"。
+- 结论：**前后端分离项目一律用 `@RestController`。**
+
+> 口诀：**`@RestController` 把返回值当数据，`@Controller` 把返回值当页面。**
