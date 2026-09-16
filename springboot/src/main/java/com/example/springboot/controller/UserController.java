@@ -18,6 +18,8 @@ public class UserController {
     // 构造器注入：容器看到这个构造器，自己把 UserService 塞进来（不用写 @Autowired）
     public UserController(UserService userService) {
         this.userService = userService;
+        // 实验：看容器注入进来的到底是真身还是代理
+        System.out.println("【看代理】注入进来的 userService 实际类型 = " + userService.getClass().getName());
     }
 
     // GET http://localhost:8080/user
