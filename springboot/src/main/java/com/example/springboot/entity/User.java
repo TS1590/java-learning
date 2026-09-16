@@ -35,4 +35,10 @@ public class User {
     public void setAge(Integer age) {
         this.age = age;
     }
+
+    // 重写 Object 的 toString()：不改也能跑，但打印出来是 User@6986a0e7，看日志很难受
+    @Override
+    public String toString() {
+        return "User{id=" + id + ", name='" + name + "', age=" + age + "}";
+    }
 }
