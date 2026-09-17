@@ -148,9 +148,40 @@ System.out.println("【看代理】注入进来的 userService 实际类型 = " 
 
 ---
 
-## 八、待办 / 下一步
-- [ ] 跑一遍实验：把 `UserService` 抽个接口出来，看代理类名会不会变？（会用 `spring.aop.proxy-target-class=false` 对比更好）
-- [ ] 给 `entity/User` 补 `toString()`，否则 `@Around` 打印的是 `User@6986a0e7` 而不是"张三"
+## 八、补练：抽接口 + 补 toString（9/16 晚追加，commit `cf7c364`）
+
+抽接口不是为了"写得好看"，而是为了**面向接口编程**：调用方只认接口签名，以后换实现（换成 MySQL 版 / 加缓存装饰器）Controller 一行都不用改。
+
+| 文件 | 变化 |
+|---|---|
+| `service/UserService.java` | 变成**接口**：只有两个方法签名，**没有 `@Service`** |
+| `service/UserServiceImpl.java` | **新建**：`@Service` + `implements UserService` + 两个 `@Override` |
+| `entity/User.java` | 补上 `@Override public String toString()` |
+
+> 口诀：**接口只写"能干什么"，实现类才写"怎么干"；`@Service` 永远标实现类。**
+> （标在接口上 → 接口不能实例化 → 启动报 `NoSuchBeanDefinitionException`）
+
+### 双轮实测：抽了接口，默认还是 CGLIB
+
+| 启动方式 | 构造器打印的注入对象类型 |
+|---|---|
+| 默认 | `UserServiceImpl$$SpringCGLIB$$0` |
+| 加 `--spring.aop.proxy-target-class=false` | `jdk.proxy2.$Proxy63` |
+
+**这实锤了昨天的 Q2**：Spring Framework 的规则是"有接口走 JDK、无接口走 CGLIB"，但 **Spring Boot 默认 `proxy-target-class=true`，统一走 CGLIB**；关掉这个配置才切成 JDK 动态代理。而且 **JDK 代理下 AOP 照常生效**（`@Around` 日志照打）——因为代理身上挂着的是"切面通知 + 真身方法"，跟代理是怎么造出来的无关。
+
+`toString()` 生效后，`@Around` 的日志从 `User@6986a0e7` 变成：
+```
+返回值：[User{id=1, name='张三', age=22}, User{id=2, name='李四', age=23}, User{id=3, name='王五', age=24}]
+```
+
+**埋一个坑（面试爱问）**：加了 `--spring.aop.proxy-target-class=false` 之后，如果 `UserController` 的构造器参数类型写成实现类 `UserServiceImpl` 而不是接口，启动会报 `BeanNotOfRequiredTypeException` —— 因为 JDK 代理不是 `UserServiceImpl` 的子类，塞不进去。**这就是"依赖接口而非实现"的实际理由。**
+
+---
+
+## 九、待办 / 下一步
+- [x] 已做 ✅（commit `cf7c364`）：抽出 `UserService` 接口 + `UserServiceImpl` 实现类，双轮实测代理类名（默认 CGLIB / 关配置变 JDK 代理）
+- [x] 已做 ✅：`entity/User` 补了 `toString()`，`@Around` 已能打印 `User{id=1, ...}` 而非 `User@6986a0e7`
 - [ ] 用自己的话说清：`@Around` 里 `proceed()` 和 `return result` 分别干了什么
 - [ ] Day 4：`@SpringBootApplication` 自动配置原理 + 配置文件（`application.properties`）
 - [ ] 9/20（周日）：W7 复盘（Bean 生命周期 / 循环依赖三级缓存 / 自动配置）
