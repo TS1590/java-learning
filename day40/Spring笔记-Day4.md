@@ -216,7 +216,41 @@ jar 内 yml 是 `app.version: 1.0.0`，在 jar 同目录放一个只写了 `app.
 
 ---
 
-## 九、待办 / 下一步
+## 九、二轮复测批改（两个都做了真机实测）
+
+### Q1'：`HelloController` 挪到 `com.example.other`（扫描范围外）→ 启动正常，但 `/hello` 返回 404
+
+实测（干净构建，避免 `target/` 里旧 class 残留干扰）：
+
+| 请求 | 结果 |
+|---|---|
+| `/hello`（`HelloController` 在 `com.example.other`） | **HTTP 404** |
+| `/user`、`/config`（仍在 `com.example.springboot` 包内） | HTTP 200 ✅ |
+| 启动日志 | `Started SpringbootApplication` + `Tomcat started on port 8932` → **启动不报错** |
+
+- **原因**：`@SpringBootApplication` 里的 `@ComponentScan` 只扫**启动类所在包及其子包**。挪出去 = 没被扫到 = 没被注册成 Bean = Spring MVC 里压根没有这条 URL 映射 → 404
+- **最该记住的分界线**：**404（找不到映射）≠ 启动失败**。`@ComponentScan` 扫不到某个类不会报错（它不知道你"本来想"让它扫）；而**启动类自己**必须能被扫到，否则整个应用一个配置类都没有
+- 修法三选：① 挪回启动类包下（推荐）② `@SpringBootApplication(scanBasePackages = "com.example.other")` ③ 单独加 `@ComponentScan("com.example.other")`
+
+### Q2'：删掉 `spring-boot-starter-webmvc`——"能"只对了一半
+
+| 阶段 | 实测结果 |
+|---|---|
+| ① 编译（Controller 还在） | ❌ **BUILD FAILURE**：`程序包 org.springframework.web.bind.annotation 不存在` |
+| ② 编译（先把 Controller 删干净） | ✅ BUILD SUCCESS |
+| ③ 运行 | ⚠️ 能"启动"，但**没有 Tomcat**（日志里 `Tomcat` 出现 **0** 次）；`Started SpringbootApplication in 0.89s` 之后**进程立刻退出**（退出码 0） |
+
+- **为什么第一步就过不去**：`@RestController` / `@GetMapping` 住在 `spring-web` 里，而 `spring-web` 是被 `spring-boot-starter-webmvc` 一起带进来的。starter 删了，注解的"包"就没了 → 编译期直接死
+- **为什么"启动了"却立刻退出**：Tomcat 那条**非守护线程**是撑着 JVM 不退出的人。没有 web 依赖 → Spring Boot 判定这是**非 Web 应用** → `main` 跑完就结束
+- **一句话**：starter 不只是"顺手加了几个 jar"，它决定了**你还算不算一个 Web 应用**。`DispatcherServlet`、Tomcat、Jackson、`@RestController` 全在这一个 starter 里
+
+### 口诀（这两题共用）
+
+> **扫不到的类不是 Bean，404 不等于报错；starter 不是加料，是身份。**
+
+---
+
+## 十、待办 / 下一步
 
 - [ ] 自己改一次 `application.yml` 里 `app.version: 1.0.0` → `2.0.0`，重启看 `/config` 返回值跟着变（验收标准最后一条，亲手做一遍）
 - [ ] 在 IDEA 里 `Ctrl+F` 搜 `Positive matches`，亲眼看一下自己项目的名字出现在条件报告里
