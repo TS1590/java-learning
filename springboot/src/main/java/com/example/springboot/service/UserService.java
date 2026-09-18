@@ -11,4 +11,7 @@ public interface UserService {
     List<User> getAllUsers();
 
     User getUserById(Long id);
+
+    // 新增一个用户，返回带 id 的完整对象
+    User addUser(User user);
 }
